@@ -16,13 +16,19 @@ a production system for training LLMs at the scale of more than 10,000 GPUs. ba
 - 55.2% Model FLOPs Utilization (MFU) when training a 175B LLM model on 12,288 GPUs, improving the MFU by 1.34× compared to Megatron-LM.
 MFU: the ratio of the observed throughput to the theoretical maximum throughput assuming 100% of peak FLOPs 
 parameter: 175B, sequence length 2048, vocabulary size 64K, 300B token, pipeline-parallel 6 interleave
-![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/per175.png)
+![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/per175.png)  
 <br/>
+
+
 **MFU has near-linear scalability as GPUs increasing**
 ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/per530.png)
 <br/>
+
+
 **Contribution distribution:**
 ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/percomp.png)
+<br/>
+
 ## Principles
 - **algorithm-system co-design(full-stack)**, see solutions
 - **in-depth observability**
@@ -59,6 +65,7 @@ tp: single node, dp > pp: inter-node
     - FWD: send step j BWD result to stage i-1, and receive step j+1 BWD data from stage i
     - BWD: send step j FWD result to stage i+1, and receive step j+1 FWD data from stage i-1
 <br/>
+
 - **overlapping in tp/sp**
   ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/otp.png)
   LayerNorm + Dropout: sequence parallelism
