@@ -1,6 +1,6 @@
 # MegaScale
 ## Objective
-a production system for training LLMs at the scale of more than 10,000 GPUs. based on Megatron-LM([NV open source on Github](https://github.com/NVIDIA/Megatron-LM), [paper](https://arxiv.org/abs/1909.08053))
+a production system for training LLMs at the scale of more than 10,000 GPUs. based on Megatron-LM([NV open source on Github](https://github.com/NVIDIA/Megatron-LM), [paper DOC](https://arxiv.org/pdf/1909.08053.pdf))
 ## Challenge
 - efficiencty
     - heavily communicate
@@ -10,14 +10,7 @@ a production system for training LLMs at the scale of more than 10,000 GPUs. ba
 - stability
 	- failures
 	- stragglers
-## Principles
-- algorithm-system co-design(full-stack), see [solutions]
-- in-depth observability
-    - monitoring + visualization + multidimensional view of system performance
-    - fault localization and recovery training framework
-    - performance analysis tool: record fine grained CUDA events and generate system-wide heat-map and timeline trace from a distributed view
-    - 3D parallel training visualization tool: show data dependencies between ranks
-  
+
 ## Performance
 ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/per175.png)
 - baseline: megatron-LM      PTB: parallel transformer block
@@ -29,10 +22,17 @@ parameter: 175B, sequence length 2048, vocabulary size 64K, 300B token, pipeline
 MFU has near-linear scalability as GPUs increasing
 
 ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/percomp.png)
-
+## Principles
+- algorithm-system co-design(full-stack), see [solutions]
+- in-depth observability
+    - monitoring + visualization + multidimensional view of system performance
+    - fault localization and recovery training framework
+    - performance analysis tool: record fine grained CUDA events and generate system-wide heat-map and timeline trace from a distributed view
+    - 3D parallel training visualization tool: show data dependencies between ranks
+  
 ## Solutions <a name="solutions"></a>
 ### Algorithm optimization
-- Parallel transformer block(PTB): enable Attention / MLP parallel to reduce computation time
+- Parallel transformer block(PTB): enable Attention/MLP parallel to reduce computation time
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/algoOpt.png)
 - Sliding window attention(SWA): 
   fixed-size window on each token instead of sequence length to reduce computation complexity from O(s*s) to O(s*w) 
@@ -40,21 +40,32 @@ MFU has near-linear scalability as GPUs increasing
 - LAMB optimizer
 Layer-wise adaptive moments optimizer for batch training
 increase batch size and adapt layer-wise learning rate to reduce training time and help model converge more quickly
-experiments show scale batch size to 4* without loss + pipeline interleave
+experiments show scale batch size to 4* without loss 
+combined with pipeline interleave can reduces 87.5 of pipeline bubbles
 ### Communication Overlapping in 3D Parallelism
 tp: single node, dp > pp: inter-node
 - Overlapping in dp
-    module chunk basis, prefetch all-reduce with data loading, high priority communication
+  all-gather---> DP ---> reduce-scatter
+  - middle communication hide on a module chunk basis, 
+  - 1st all-gather use prefetch to overlap with data loading
+  - high priority communication
 
 - overlapping in pp
   ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/opp.png)
-        
-- overlapping in tp/sp
+  - warm-up + cool-down: decouple Send and Receive to, enable Send to overlap with computation
+  - Steady: independent of adjacent communication
+    - FWD: send step j BWD result to stage i-1, and receive step j+1 BWD data from stage i
+    - BWD: send step j FWD result to stage i+1, and receive step j+1 FWD data from stage i-1
+    - overlapping in tp/sp
   ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/otp.png)
+  LayerNorm + Dropout: sequence parallelism
+    - fuse all-gather with the ColParaLinear, reduce-scatter with the RowParaLinear
+    - break GEMM kernel into small chunks and pipeline execution with communication 
             
 ### Efficient operators
-    Attention: FlashAttention-2(GEMM in baseline)
-    LayerNorm+GeLU: fusing kernels with previous implementations
+already have GEMM in baseline
+Attention: FlashAttention-2, improves work partitioning between thread blocks and warps
+LayerNorm+ GeLU: fusing fine-grained kernels in previous implementations
 ### Network performance tuning
 - topology
         3-layer CLOS (>10KGPU) production environment
@@ -92,27 +103,27 @@ tp: single node, dp > pp: inter-node
   - detect + diagnostic tests < 10min
   - resume training job again < 15min
 ### others
-    - Asynchronous data preprocessing
-    - 1 data load to share mem, 2-layer tree-based copy in node
-    - replace blocking + global barrier when init
+- Asynchronous data preprocessing while synchronizing gradients at end of training step
+- 1 data loader to share mem, 2-layer tree-based copy to each GPU memory with in the node when using tp
+- torch.distributed profiling: replace blocking TCPStore with non-blocking Redis + minimize the need of global barrier when NCCL communication groups initialize, decrease the init time from 1047s to 5s on 2048 GPUs, and achieve 30s on 10K+ GPUs
 ## Experience
 - stragglers
-    tool: CUDA event timers    
-    Phenomena: specific hosts took 10%+ time across different jobs      
+    tool: CUDA event timers
+    Phenomena: specific hosts took 10%+ time across different jobs
     solution: isolate and remove these hosts from cluster
 - MFU decreasing
-    tool: CUDA event timers      
-    Phenomena: MFU gradually decrease as training progresses      
+    tool: CUDA event timers
+    Phenomena: MFU gradually decrease as training progresses
     solution: code error cause random fluctuation of launch time of reduce-scatter on some ranks
 - network interface flapping
-    Phenomena: network interface goes down and up in several seconds      
-    solution: 
-    - set NCCL timeout threshold to a larger value;       
+    Phenomena: network interface goes down and up in several seconds
+    solution:
+    - set NCCL timeout threshold to a larger value;
     - lower level quality control over NIC/Switch signal strength, cable quality.
  
 ## Trouble shooting
-Performance Diagnosis with CUDA Event Monitor 
-3D Parallel Training Visualization 
+Performance Diagnosis with CUDA Event Monitor
+3D Parallel Training Visualization
 
 ## background
 - Data parallelism
@@ -136,3 +147,9 @@ Performance Diagnosis with CUDA Event Monitor 
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/sp2.png)
 - transformer
   ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/trans.png)
+## Relative papers
+[Attention Is All You Need](https://arxiv.org/pdf/1706.03762.pdf)
+[Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism](https://arxiv.org/pdf/1909.08053.pdf)
+[Efficient large-scale language model training on gpu clusters using megatron-lm](https://arxiv.org/pdf/2104.04473.pdf)
+[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/pdf/1910.02054.pdf)
+[Sequence Parallelism: Long Sequence Training from System Perspective](https://arxiv.org/pdf/2105.13120.pdf)
