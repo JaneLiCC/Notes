@@ -43,18 +43,18 @@ parameter: 175B, sequence length 2048, vocabulary size 64K, 300B token, pipeline
 ## Solutions <a name="solutions"></a>
 ### Network performance tuning
 - **topology**
-        3-layer CLOS (>10KGPU) production environment
-        Tomahawk-4 64*400G
-        downlink:uplink BW 1:1 (port 32:32)
-        ToR: breakout to 2*200G+AOC cable (can connct 64 NICs)
-        Node: 8 200G NICs rail-optimize, Ampere GPU
+  - 3-layer CLOS (>10KGPU) production environment
+  - Tomahawk-4 64*400G
+  - downlink:uplink BW 1:1 (port 32:32)
+  - ToR: breakout to 2*200G+AOC cable (can connct 64 NICs)
+  - Node: 8 200G NICs rail-optimize, Ampere GPU
 - **reduce ECMP hash conflict**
-        Schedule task on nodes under the same ToR
-        TP=8 and constrain in one node
-        CC: Swift+DCQCN+RTT, rapid response of ECN, reduce PFC
+  - Schedule task on nodes under the same ToR
+  - TP=8 and constrain in one node
+  - CC: Swift+DCQCN+RTT, rapid response of ECN, reduce PFC
 - **Retransmit timeout tuning**
-        NIC: adap_retrans feature
-        NCCL: retransmit timer+retry count, fast recovery on link flap
+  - NIC: adap_retrans feature
+  - NCCL: retransmit timer+retry count, fast recovery on link flap
 ### Algorithm optimization
 - **Parallel transformer block(PTB)**: enable Attention/MLP parallel to reduce computation time
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/algoOpt.png)
