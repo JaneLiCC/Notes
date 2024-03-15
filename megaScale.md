@@ -3,19 +3,22 @@
 a production system for training LLMs at the scale of more than 10,000 GPUs. based on Megatron-LM([NV open source on Github](https://github.com/NVIDIA/Megatron-LM), [paper DOC](https://arxiv.org/pdf/1909.08053.pdf))
 ## Challenge
 - **efficiencty**
-    - heavily communicate
+    - heavily communication
+    - GPU memory consumption
     - operator optimization
     - data preprocessing
-    - GPU memory consumption
+
 - **stability**
 	- failures
 	- stragglers
 
 ## Performance
-- baseline: megatron-LM      PTB: parallel transformer block
+- baseline: megatron-LM      
+- PTB: parallel transformer block
 - 55.2% Model FLOPs Utilization (MFU) when training a 175B LLM model on 12,288 GPUs, improving the MFU by 1.34× compared to Megatron-LM.
 MFU: the ratio of the observed throughput to the theoretical maximum throughput assuming 100% of peak FLOPs 
 parameter: 175B, sequence length 2048, vocabulary size 64K, 300B token, pipeline-parallel 6 interleave
+![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/Screenshot%202024-03-12%20175628.png)
 ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/per175.png)  
 <br/>
 
@@ -38,6 +41,20 @@ parameter: 175B, sequence length 2048, vocabulary size 64K, 300B token, pipeline
     - 3D parallel training visualization tool: show data dependencies between ranks
   
 ## Solutions <a name="solutions"></a>
+### Network performance tuning
+- **topology**
+        3-layer CLOS (>10KGPU) production environment
+        Tomahawk-4 64*400G
+        downlink:uplink BW 1:1 (port 32:32)
+        ToR: breakout to 2*200G+AOC cable (can connct 64 NICs)
+        Node: 8 200G NICs rail-optimize, Ampere GPU
+- **reduce ECMP hash conflict**
+        Schedule task on nodes under the same ToR
+        TP=8 and constrain in one node
+        CC: Swift+DCQCN+RTT, rapid response of ECN, reduce PFC
+- **Retransmit timeout tuning**
+        NIC: adap_retrans feature
+        NCCL: retransmit timer+retry count, fast recovery on link flap
 ### Algorithm optimization
 - **Parallel transformer block(PTB)**: enable Attention/MLP parallel to reduce computation time
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/algoOpt.png)
@@ -53,7 +70,7 @@ combined with pipeline interleave can reduces 87.5 of pipeline bubbles
 tp: single node, dp > pp: inter-node
 - **Overlapping in dp**
   all-gather---> DP ---> reduce-scatter
-  - middle communication hide on a module chunk basis, 
+  - middle communication hide on a module chunk basis
   - 1st all-gather use prefetch to overlap with data loading
   - high priority communication
 <br/>
@@ -76,20 +93,7 @@ tp: single node, dp > pp: inter-node
 already have GEMM in baseline
 Attention: FlashAttention-2, improves work partitioning between thread blocks and warps
 LayerNorm+ GeLU: fusing fine-grained kernels in previous implementations
-### Network performance tuning
-- **topology**
-        3-layer CLOS (>10KGPU) production environment
-        Tomahawk-4 64*400G
-        downlink:uplink BW 1:1 (port 32:32)
-        ToR: breakout to 2*200G+AOC cable (can connct 64 NICs)
-        Node: 8 200G NICs rail-optimize, Ampere GPU
-- **reduce ECMP hash conflict**
-        Schedule task on nodes under the same ToR
-        TP=8 and constrain in one node
-        CC: Swift+DCQCN+RTT, rapid response of ECN, reduce PFC
-- **Retransmit timeout tuning**
-        NIC: adap_retrans feature
-        NCCL: retransmit timer+retry count, fast recovery on link flap
+
 ### Fault Tolerance
 ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/ft.png)
 - Data collection: Executor(pre node)      
@@ -137,8 +141,9 @@ Performance Diagnosis with CUDA Event Monitor
 
 ## background
 - **Data parallelism**
-  并行的多个GPU前向计算全部完成之后，从最后一层逐层反向传播，ReduceScatter+AllGather，每层计算梯度时不仅需要后一层计算好的值，还需要前向计算过程中的中间值，计算完成之后，继续ReduceScatter+AllGather
-  Zero-2：每个GPU维护 所有的参数，自己负责那部分的梯度+中间变量(精度32，12*F)
+  并行的多个GPU前向计算全部完成之后，从最后一层逐层反向传播，每个GPU先计算本地梯度，然后ReduceScatter将同一梯度的数据聚合到一个GPU，由各个GPU计算根据全局梯度+Adam算法更新自己负责计算的那部分参数，计算完成之后，AllGather将更新好的参数同步到每个GPU，最终完成本层反向计算。
+  注意：DP做前向计算时，因为每层有全部参数，不依赖与其他GPU，可以单独计算。DP做后向计算梯度时，下一层的梯度计算不依赖于上一层的梯度聚合结果，也可以单独进行，可以做到通信和计算重叠。(每层计算梯度时不仅需要后一层计算好的值，还需要前向计算过程中的中间值)
+  Zero-2：每个GPU维护 所有的参数，自己负责那部分的梯度+Adam中间变量(精度32，12*F)
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/dp.png)
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/zero.png)
 - **Pipeline parallelism**: micro batch + vitual stage
@@ -146,7 +151,7 @@ Performance Diagnosis with CUDA Event Monitor
     - warm-up：forward
     - steady：1F1B
     - cool-down: backward
-    ？每个micor-batch结束都进行后向传播吗？
+    ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/Screenshot%202024-03-15%20093922.png)
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/pp.png)
 - **Tensor parallelism**: intra-node
     f：duplicate    g: sum
@@ -155,8 +160,11 @@ Performance Diagnosis with CUDA Event Monitor
 - **sequence parallelism**
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/sp1.png)
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/sp2.png)
+- **3D parallel**
+  ![3D](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/parallelism-deepspeed-3d.png)
 - **transformer**
   ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/trans.png)
+  ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/transformerBlock.png)
 ## Relative papers
 [Attention Is All You Need](https://arxiv.org/pdf/1706.03762.pdf)  
 [Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism](https://arxiv.org/pdf/1909.08053.pdf)  
