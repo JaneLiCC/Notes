@@ -146,7 +146,14 @@ Performance Diagnosis with CUDA Event Monitor
   Zero-2：每个GPU维护 所有的参数，自己负责那部分的梯度+Adam中间变量(精度32，12*F)
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/dp.png)
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/zero.png)
+
+    劣势：
+    1. 受限于memory的大小，大模型不可能放到单个GPU上
+    2. dp并行数最大为batchsize，而batchsize不能无限扩大
+    3. 当每个GPU的batch太小时，无法充分利用GPU的计算能力
 - **Pipeline parallelism**: micro batch + vitual stage
+    [pipeline compare](https://zhuanlan.zhihu.com/p/432969288)
+    Gpipe->pipedream->1f1b
     每个Worker中类似TP再切分virtual stage，经历3个阶段：
     - warm-up：forward
     - steady：1F1B
@@ -156,13 +163,18 @@ Performance Diagnosis with CUDA Event Monitor
 - **Tensor parallelism**: intra-node
     f：duplicate    g: sum
     heavy communication, need allReduce, block
+    劣势：
+    通信量大，通常只能利用单个Node内的NVlink传输，无法跨Node并行
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/tp.png)
 - **sequence parallelism**
+    当序列长度特别长时，单个GPU无法内存无法容纳，适用
+    对于Attention阶段，每个GPU上包含完整QKV参数，将序列分段后分别将一部分Token序列发给不同的GPU，各个GPU分别计算自己收到的这些Token的QKV值，通过N-1次的key传递，依次得到$Q_i$与不同$K_i$的乘积，进而得到$Q_iK^T$的值(矩阵维度$\frac{s}{n}*s$)，之后再通过N-1次的value传递，最终得到$Q_iK^TV$的值。
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/sp1.png)
     ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/sp2.png)
 - **3D parallel**
   ![3D](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/parallelism-deepspeed-3d.png)
 - **transformer**
+  [blog](https://www.cnblogs.com/rossiXYZ/p/15840803.html)
   ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/trans.png)
   ![](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/transformerBlock.png)
 ## Relative papers
