@@ -11,36 +11,25 @@
 :::MLLOG {"namespace": "", "time_ms": 1696565401886, "event_type": "POINT_IN_TIME", "key": "tracked_stats", "value": {"train_epoch_timing": 234.93810319900513}, "metadata": {"file": "/workspace/llm/custom_callbacks.py", "lineno": 277, "step": 1211105280}}
 :::MLLOG {"namespace": "", "time_ms": 1696565401886, "event_type": "POINT_IN_TIME", "key": "tracked_stats", "value": {"throughput": 5154997.267404211}, "metadata": {"file": "/workspace/llm/custom_callbacks.py", "lineno": 284, "step": 1211105280}}
 
-:::MLLOG {"namespace": "", "time_ms": 1696566271481, "event_type": "POINT_IN_TIME", "key": "tracked_stats", "value": {"train_epoch_timing": 235.02987575531006}, "metadata": {"file": "/workspace/llm/custom_callbacks.py", "lineno": 277, "step": 1211105280}}
-:::MLLOG {"namespace": "", "time_ms": 1696566271481, "event_type": "POINT_IN_TIME", "key": "tracked_stats", "value": {"throughput": 5152984.38595476}, "metadata": {"file": "/workspace/llm/custom_callbacks.py", "lineno": 284, "step": 1211105280}}
-
-:::MLLOG {"namespace": "", "time_ms": 1696567160811, "event_type": "POINT_IN_TIME", "key": "tracked_stats", "value": {"train_epoch_timing": 236.02015089988708}, "metadata": {"file": "/workspace/llm/custom_callbacks.py", "lineno": 277, "step": 1211105280}}
-:::MLLOG {"namespace": "", "time_ms": 1696567160811, "event_type": "POINT_IN_TIME", "key": "tracked_stats", "value": {"throughput": 5131363.89152516}, "metadata": {"file": "/workspace/llm/custom_callbacks.py", "lineno": 284, "step": 1211105280}}
-
-one epoch = one forward pass and one backward pass of all the training examples
-batch size = the number of training examples in one forward/backward pass. The higher the batch size, the more memory space you'll need.
-number of iterations = number of passes, each pass using [batch size] number of examples. To be clear, one pass = one forward pass + one backward pass (we do not count the forward pass and backward pass as two different passes).
-
-
-
 ### Traffic size
-B: global batch size
-b: micro batch size
-n: GPU numbers, n=p*t*d
-l: layers 96
-h: hidden size, vector length, 12288
-a: attention-heads 96
-s: sequence length 2048 
-V: vacabulary size 51200
-p: pp
-t: tp
-d: dp
-T: all training tokens
-X: average FLOPs per GPU, $\approx peak FLOPs * utilization$ 
+- B: global batch size, the number of training examples in one forward/backward pass
+- b: micro batch size
+- n: GPU numbers, n=p*t*d
+- l: layers 96
+- h: hidden size, vector length, 12288
+- a: attention-heads 96
+- s: sequence length 2048 
+- V: vacabulary size 51200
+- p: pp
+- t: tp
+- d: dp
+- T: all training tokens
+- X: average FLOPs per GPU, $\approx peak FLOPs * utilization$ 
+
 [GPT parameters](https://docs.google.com/spreadsheets/d/10Y4GLc28UgeKr2qSYEZuRqELn1D-w5EiQpAGg-_y4Xg/edit#gid=899002403)
 $$模型参数P = 12lh^2(1+\frac{13}{12h}+\frac{V+s}{12lh})$$
-$$单次迭代(1个batch，B*s个token)浮点运算次数F = 96Bslh^2(1+\frac{s}{6h}+\frac{V}{16lh}) $$
-$$单次训练(全部Token)浮点运算次数F = 96Tlh^2(1+\frac{s}{6h}+\frac{V}{16lh}) $$
+$$单次迭代iteration(1个batch，B*s个token)浮点运算次数F = 96Bslh^2(1+\frac{s}{6h}+\frac{V}{16lh}) $$
+$$单次训练epoch(全部Token)浮点运算次数F = 96Tlh^2(1+\frac{s}{6h}+\frac{V}{16lh}) $$
 $$估计训练用时 = \frac{8TP}{nX}$$
 $$
 模型内存占用大小 = \begin{cases}
@@ -48,6 +37,8 @@ $$
 (2+\frac{14}{d})P &with & Zero-2
 \end{cases}
 $$
+$$迭代次数=\frac{T}{Bs}$$
+
 | Name | Traffic | Communication/layer/GPU| Data | Level |
 | ---- | ---- | ---- | ---- |----|
 | DP | O(h * h) | BW: 2*AllReduce| BW:gradients |20GB/s单卡AllReduce带宽|
