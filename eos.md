@@ -31,13 +31,9 @@ $$模型参数P = 12lh^2(1+\frac{13}{12h}+\frac{V+s}{12lh})$$
 $$单次迭代iteration(1个batch，B*s个token)浮点运算次数F = 96Bslh^2(1+\frac{s}{6h}+\frac{V}{16lh}) $$
 $$单次训练epoch(全部Token)浮点运算次数F = 96Tlh^2(1+\frac{s}{6h}+\frac{V}{16lh}) $$
 $$估计训练用时 = \frac{8TP}{nX}$$
-$$
-模型内存占用大小 = \begin{cases}
-16P &without &Zero\\\
-(2+\frac{14}{d})P &with & Zero-2
-\end{cases}
-$$
 $$迭代次数=\frac{T}{Bs}$$
+$模型内存占用大小(without Zero) = 16P$
+$模型内存占用大小(with Zero-2)=(2+\frac{14}{d})P$
 
 | Name | Traffic | Communication/layer/GPU| Data | Level |
 | ---- | ---- | ---- | ---- |----|
