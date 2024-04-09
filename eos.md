@@ -35,8 +35,10 @@ $$迭代次数=\frac{T}{Bs}$$
 $模型内存占用大小(without Zero) = 16P$
 $模型内存占用大小(with Zero-2)=(2+\frac{14}{d})P$
 
-| Name | Traffic | Communication/layer/GPU| Data | Level |
+| parallelism | size | Communication times/layer| Data | Level |
 | ---- | ---- | ---- | ---- |----|
-| DP | O(h * h) | BW: 2*AllReduce| BW:gradients |20GB/s单卡AllReduce带宽|
-| PP | O(b * s * h) | P2P |FW: calc results BW:gradients|MB/s|
-| TP | O(B * s * h) | FW: 2*AllReduce BW:2*AllReduce| FW: calc results BW:gradients |100GB/s|
+| DP | O(h * h) | FW:0 BW: 2*AllReduce| BW:gradients |GB-10GB, 20GB/s单卡AllReduce带宽|
+| PP | O(b * s * h) | P2P PP层间 |FW: calc results BW:gradients|MB|
+| TP | O(B * s * h) | FW: 2*AllReduce BW:2*AllReduce| FW: calc results BW:gradients |10G-100GB|
+
+![3D parallem](https://raw.githubusercontent.com/JaneLiCC/testDemo/main/images/Screenshot%202024-04-09%20142106.png)
